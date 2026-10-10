@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: gemini
+    description: AI chat operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /gemini/chat:
+    post:
+      operationId: sendGeminiChat
+      tags: [gemini]
+      summary: Stream an AI chat response
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GeminiChatInput"
+      responses:
+        "200":
+          description: Server-sent stream of assistant response chunks
+          content:
+            text/event-stream: {}
+        "400":
+          description: Invalid chat request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiError"
+        "503":
+          description: AI is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiError"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +63,30 @@ components:
           type: string
       required:
         - status
+    GeminiChatMessage:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+          maxLength: 12000
+      required: [role, content]
+    GeminiChatInput:
+      type: object
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 40
+          items:
+            $ref: "#/components/schemas/GeminiChatMessage"
+      required: [messages]
+    GeminiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
 
