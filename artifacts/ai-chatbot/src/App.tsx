@@ -36,12 +36,61 @@ function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [isClearingHistory, setIsClearingHistory] = useState(false);
   const [serviceMessage, setServiceMessage] = useState('');
   const [requestError, setRequestError] = useState('');
+  const [databaseMessage, setDatabaseMessage] = useState('');
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<AbortController | null>(null);
   const hasConversation = messages.length > 0;
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadHistory = async () => {
+      try {
+        const response = await fetch('/api/chat/history', {
+          credentials: 'include',
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(
+            typeof payload?.error === 'string'
+              ? payload.error
+              : 'Chat history could not be loaded.',
+          );
+        }
+        if (!cancelled) {
+          const loadedMessages = Array.isArray(payload?.messages)
+            ? payload.messages.filter((message: unknown): message is Message =>
+                typeof message === 'object' &&
+                message !== null &&
+                ((message as Message).role === 'user' ||
+                  (message as Message).role === 'assistant') &&
+                typeof (message as Message).content === 'string',
+              ).map((message: Message) => ({ ...message, id: makeId() }))
+            : [];
+          setMessages(loadedMessages);
+          setDatabaseMessage('');
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setDatabaseMessage(
+            error instanceof Error
+              ? error.message
+              : 'Chat history could not be loaded.',
+          );
+        }
+      } finally {
+        if (!cancelled) setIsLoadingHistory(false);
+      }
+    };
+    void loadHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -49,18 +98,44 @@ function Home() {
 
   useEffect(() => () => controllerRef.current?.abort(), []);
 
-  const startNewChat = () => {
-    controllerRef.current?.abort();
-    controllerRef.current = null;
-    setMessages([]);
-    setDraft('');
-    setIsStreaming(false);
-    setServiceMessage('');
-    setRequestError('');
-    composerRef.current?.focus();
+  const startNewChat = async () => {
+    if (isLoadingHistory || isClearingHistory) return;
+    setIsClearingHistory(true);
+    setDatabaseMessage('');
+    try {
+      const response = await fetch('/api/chat/history', {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(
+          typeof payload?.error === 'string'
+            ? payload.error
+            : 'The saved chat could not be cleared.',
+        );
+      }
+      controllerRef.current?.abort();
+      controllerRef.current = null;
+      setMessages([]);
+      setDraft('');
+      setIsStreaming(false);
+      setServiceMessage('');
+      setRequestError('');
+      composerRef.current?.focus();
+    } catch (error) {
+      setDatabaseMessage(
+        error instanceof Error
+          ? error.message
+          : 'The saved chat could not be cleared.',
+      );
+    } finally {
+      setIsClearingHistory(false);
+    }
   };
 
   const sendMessage = async (rawContent: string) => {
+    if (isLoadingHistory || isClearingHistory) return;
     const content = rawContent.trim();
     if (!content || isStreaming) return;
 
@@ -71,6 +146,7 @@ function Home() {
     setDraft('');
     setServiceMessage('');
     setRequestError('');
+    setDatabaseMessage('');
     setIsStreaming(true);
 
     const controller = new AbortController();
@@ -104,7 +180,7 @@ function Home() {
         }
         setMessages(nextMessages);
         if (response.status === 503) {
-          setServiceMessage(detail || 'Gemini chat is not available yet. Please try again later.');
+          setServiceMessage(detail || 'The chat service is not available yet. Please try again later.');
         } else {
           setRequestError(detail || 'That message could not be sent. Please try again.');
         }
@@ -175,6 +251,10 @@ function Home() {
     }
   };
 
+  /*
+   * Chat history is loaded before the composer becomes active, so outgoing
+   * requests always include the complete saved context.
+   */
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void sendMessage(draft);
@@ -209,13 +289,14 @@ function Home() {
             </div>
             <button
               type="button"
-              onClick={startNewChat}
-              className="group inline-flex h-10 items-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card)/.74)] px-3.5 text-[13px] font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:border-[hsl(var(--primary)/.35)] hover:bg-card hover:shadow-xs active:translate-y-0"
+              onClick={() => void startNewChat()}
+              disabled={isLoadingHistory || isClearingHistory}
+              className="group inline-flex h-10 items-center gap-2 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card)/.74)] px-3.5 text-[13px] font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:border-[hsl(var(--primary)/.35)] hover:bg-card hover:shadow-xs active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Start a new chat"
               data-testid="button-new-chat"
             >
               <Plus className="size-4 transition-transform duration-200 group-hover:rotate-90" strokeWidth={1.8} />
-              <span className="hidden sm:inline">New chat</span>
+              <span className="hidden sm:inline">{isClearingHistory ? 'Clearing…' : 'New chat'}</span>
             </button>
           </div>
         </header>
@@ -266,7 +347,7 @@ function Home() {
                     <span className="pl-2 text-[11px] text-muted-foreground/80">Plain words are perfect</span>
                     <button
                       type="submit"
-                      disabled={!draft.trim() || isStreaming}
+                      disabled={!draft.trim() || isStreaming || isLoadingHistory || isClearingHistory}
                       aria-label="Send message"
                       className="flex size-10 items-center justify-center rounded-[14px] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0 disabled:hover:shadow-none"
                       data-testid="button-send-message"
@@ -275,6 +356,11 @@ function Home() {
                     </button>
                   </div>
                 </form>
+                {databaseMessage && (
+                  <div className="mt-4 rounded-[16px] border border-[hsl(var(--primary)/.2)] bg-[hsl(var(--primary)/.06)] px-4 py-3 text-[13px] leading-relaxed" role="status" data-testid="status-database-message">
+                    {databaseMessage}
+                  </div>
+                )}
 
                 <div className="mt-8">
                   <div className="mb-3 pl-1 font-mono text-[9px] uppercase tracking-[.16em] text-muted-foreground/80">Not sure where to begin?</div>
@@ -283,8 +369,9 @@ function Home() {
                       <button
                         key={suggestion.label}
                         type="button"
+                        disabled={isLoadingHistory || isClearingHistory}
                         onClick={() => void sendMessage(suggestion.prompt)}
-                        className="group flex min-h-[62px] items-center justify-between gap-3 rounded-[15px] border border-[hsl(var(--border)/.8)] bg-[hsl(var(--card)/.52)] px-4 py-3 text-left text-[12px] font-medium leading-[1.45] text-[hsl(var(--foreground)/.8)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[hsl(var(--primary)/.32)] hover:bg-card hover:shadow-xs"
+                        className="group flex min-h-[62px] items-center justify-between gap-3 rounded-[15px] border border-[hsl(var(--border)/.8)] bg-[hsl(var(--card)/.52)] px-4 py-3 text-left text-[12px] font-medium leading-[1.45] text-[hsl(var(--foreground)/.8)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[hsl(var(--primary)/.32)] hover:bg-card hover:shadow-xs disabled:cursor-not-allowed disabled:opacity-50"
                         data-testid={`button-prompt-${index + 1}`}
                       >
                         {suggestion.label}
@@ -328,9 +415,14 @@ function Home() {
                     </article>
                   ))}
                 </div>
+                {databaseMessage && (
+                  <div className="mb-5 rounded-[16px] border border-[hsl(var(--primary)/.2)] bg-[hsl(var(--primary)/.06)] px-4 py-3.5 text-[13px] leading-relaxed" role="status" data-testid="status-database-message">
+                    {databaseMessage}
+                  </div>
+                )}
                 {serviceMessage && (
                   <div className="mb-5 rounded-[16px] border border-[hsl(var(--primary)/.2)] bg-[hsl(var(--primary)/.06)] px-4 py-3.5 text-[13px] leading-relaxed text-foreground" role="status" data-testid="status-service-message">
-                  <span className="mb-1 block font-mono text-[9px] uppercase tracking-[.15em] text-[hsl(var(--primary))]">Gemini setup notice</span>
+                    <span className="mb-1 block font-mono text-[9px] uppercase tracking-[.15em] text-[hsl(var(--primary))]">Setup notice</span>
                     {serviceMessage}
                   </div>
                 )}
@@ -365,7 +457,7 @@ function Home() {
                   <span className="pl-2 text-[10px] text-muted-foreground/75">Enter to send · Shift + Enter for a new line</span>
                   <button
                     type="submit"
-                    disabled={!draft.trim() || isStreaming}
+                    disabled={!draft.trim() || isStreaming || isLoadingHistory || isClearingHistory}
                     aria-label="Send message"
                     className="flex size-9 items-center justify-center rounded-[13px] bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:translate-y-0"
                     data-testid="button-send-message"

@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './chatHistory';
 export * from './geminiChatInput';
 export * from './geminiChatMessage';
 export * from './geminiChatMessageRole';

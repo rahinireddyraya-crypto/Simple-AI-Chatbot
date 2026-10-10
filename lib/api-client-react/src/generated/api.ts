@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ChatHistory,
   GeminiChatInput,
   GeminiError,
   HealthStatus
@@ -216,5 +217,156 @@ export const useSendGeminiChat = <TError = ErrorType<GeminiError>,
         TContext
       > => {
       return useMutation(getSendGeminiChatMutationOptions(options));
+    }
+
+export const getGetChatHistoryUrl = () => {
+
+
+
+
+  return `/api/chat/history`
+}
+
+/**
+ * @summary Load saved chat history
+ */
+export const getChatHistory = async ( options?: Parameters<typeof customFetch>[1]): Promise<ChatHistory> => {
+
+  return customFetch<ChatHistory>(getGetChatHistoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetChatHistoryQueryKey = () => {
+    return [
+    `/api/chat/history`
+    ] as const;
+    }
+
+
+export const getGetChatHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getChatHistory>>, TError = ErrorType<GeminiError>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getChatHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetChatHistoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getChatHistory>>> = ({ signal }) => getChatHistory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getChatHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetChatHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getChatHistory>>>
+export type GetChatHistoryQueryError = ErrorType<GeminiError>
+
+
+/**
+ * @summary Load saved chat history
+ */
+
+export function useGetChatHistory<TData = Awaited<ReturnType<typeof getChatHistory>>, TError = ErrorType<GeminiError>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getChatHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetChatHistoryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getClearChatHistoryUrl = () => {
+
+
+
+
+  return `/api/chat/history`
+}
+
+/**
+ * @summary Clear saved chat history
+ */
+export const clearChatHistory = async ( options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getClearChatHistoryUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getClearChatHistoryMutationKey = () => ['clearChatHistory'] as const;
+
+export const getClearChatHistoryMutationOptions = <TError = ErrorType<GeminiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearChatHistory>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof clearChatHistory>>, TError,void, TContext> => {
+
+const mutationKey = getClearChatHistoryMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof clearChatHistory>>, void> = () => {
+
+
+          return  clearChatHistory(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClearChatHistoryMutationResult = NonNullable<Awaited<ReturnType<typeof clearChatHistory>>>
+
+    export type ClearChatHistoryMutationError = ErrorType<GeminiError>
+
+
+    /**
+ * @summary Clear saved chat history
+ */
+export const useClearChatHistory = <TError = ErrorType<GeminiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof clearChatHistory>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof clearChatHistory>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getClearChatHistoryMutationOptions(options));
     }
 

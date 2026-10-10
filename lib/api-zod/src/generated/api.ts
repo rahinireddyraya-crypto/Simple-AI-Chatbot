@@ -36,3 +36,24 @@ export const SendGeminiChatBody = zod.object({
 export const SendGeminiChatResponse = zod.unknown()
 
 
+/**
+ * @summary Load saved chat history
+ */
+export const getChatHistoryResponseMessagesItemContentMax = 12000;
+
+
+
+export const GetChatHistoryResponse = zod.object({
+  "messages": zod.array(zod.object({
+  "role": zod.enum(['user', 'assistant']),
+  "content": zod.string().max(getChatHistoryResponseMessagesItemContentMax)
+}))
+})
+
+
+/**
+ * @summary Clear saved chat history
+ */
+export const ClearChatHistoryResponse = zod.void()
+
+

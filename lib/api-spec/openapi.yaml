@@ -49,7 +49,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/GeminiError"
         "503":
-          description: AI is not configured
+          description: AI or chat-history storage is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiError"
+  /chat/history:
+    get:
+      operationId: getChatHistory
+      tags: [gemini]
+      summary: Load saved chat history
+      responses:
+        "200":
+          description: Saved messages for this browser session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatHistory"
+        "503":
+          description: Chat history storage is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeminiError"
+    delete:
+      operationId: clearChatHistory
+      tags: [gemini]
+      summary: Clear saved chat history
+      responses:
+        "204":
+          description: Saved chat history cleared
+        "503":
+          description: Chat history storage is not available
           content:
             application/json:
               schema:
@@ -80,6 +111,14 @@ components:
           type: array
           minItems: 1
           maxItems: 40
+          items:
+            $ref: "#/components/schemas/GeminiChatMessage"
+      required: [messages]
+    ChatHistory:
+      type: object
+      properties:
+        messages:
+          type: array
           items:
             $ref: "#/components/schemas/GeminiChatMessage"
       required: [messages]

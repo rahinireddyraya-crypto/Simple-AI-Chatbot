@@ -31,6 +31,10 @@ export interface GeminiChatInput {
   messages: GeminiChatMessage[];
 }
 
+export interface ChatHistory {
+  messages: GeminiChatMessage[];
+}
+
 export interface GeminiError {
   error: string;
 }
